@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Check-in</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>tailwind.config={theme:{extend:{colors:{brand:'#007F5F',cream:'#E5E7EB'}}}}</script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{font-family:'Noto Sans Thai',system-ui,sans-serif;background:#06231d linear-gradient(180deg,#076653 0%,#0c342c 50%,#06231d 100%) no-repeat;min-height:100vh;color:#16352b}
+.blob{position:fixed;border-radius:9999px;filter:blur(70px);opacity:.15;z-index:0;pointer-events:none}
+.card{background:#F9FAFB;border:1px solid rgba(0,127,95,.15);box-shadow:0 10px 30px -14px rgba(0,80,60,.25)}
+.fld{width:100%;margin-top:.35rem;border:1.5px solid #D1D5DB;border-radius:.9rem;padding:.8rem 1rem;background:#F3F4F6;outline:none;transition:.15s}
+.fld:focus{border-color:#007F5F;box-shadow:0 0 0 4px rgba(0,127,95,.15);background:#fff}
+.num{width:1.6rem;height:1.6rem;border-radius:9999px;background:#007F5F;color:#fff;font-size:.75rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-right:.5rem}
+.fade{animation:fade .5s ease both}@keyframes fade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.btn{transition:.15s}.btn:active{transform:scale(.97)}
+</style>
+</head>
+<body class="min-h-screen text-[#16352b]">
+<div class="blob w-72 h-72 bg-emerald-300 -top-20 -left-20"></div>
+<div class="blob w-72 h-72 bg-emerald-300 top-1/2 -right-24"></div>
+<div class="relative z-10 max-w-md mx-auto px-4 pb-28">
+  <header class="pt-8 pb-5 text-cream fade">
+    <div class="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-3 py-1 text-xs"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ระบบออนไลน์</div>
+    <h1 class="text-2xl font-bold mt-3 leading-tight">Daily Check-in</h1>
+    <p class="text-cream/70 text-sm">ระบบเช็กอินพนักงาน</p>
+    <div class="mt-4 bg-white/10 border border-white/15 text-cream rounded-2xl px-4 py-3 flex items-center justify-between">
+      <span class="text-xs text-cream/80">เวลาปัจจุบัน</span><span id="clock" class="font-semibold tabular-nums text-lg"></span>
+    </div>
+  </header>
+
+  <div id="form" class="space-y-4">
+    <section class="card rounded-3xl p-5 space-y-4 fade" style="animation-delay:.05s">
+      <label class="block text-sm font-semibold"><span class="num">1</span>ชื่อพนักงาน
+        <input id="emp" class="fld font-normal" placeholder="ชื่อ-นามสกุล" autocomplete="name"></label>
+      <label class="block text-sm font-semibold"><span class="num">2</span>ชื่อสาขา
+        <select id="store" class="fld font-normal"><option value="">-- เลือกสาขา --</option></select></label>
+      <input id="storeOther" class="fld font-normal hidden" placeholder="พิมพ์ชื่อสถานที่">
+      <label class="block text-sm font-semibold"><span class="num">3</span>วันที่/เวลา <span class="text-xs font-normal text-slate-400">🔒 ล็อก</span>
+        <input id="dt" readonly class="fld font-normal !bg-slate-100 text-slate-500"></label>
+    </section>
+
+    <section class="card rounded-3xl p-5 fade" style="animation-delay:.1s">
+      <p class="text-sm font-semibold mb-3"><span class="num">4</span>รูปเช็กอินที่ร้าน</p>
+      <input id="photo" type="file" accept="image/*" capture="environment" class="hidden">
+      <button type="button" id="b1" onclick="takePhoto()" class="btn w-full rounded-2xl border-2 border-dashed border-brand/40 bg-brand/5 text-brand py-6 font-semibold"><div class="text-3xl">📷</div>แตะเพื่อถ่ายรูป</button>
+      <img id="pv1" class="hidden rounded-2xl w-full max-h-64 object-cover shadow">
+    </section>
+
+    <section class="card rounded-3xl p-5 fade" style="animation-delay:.15s">
+      <p class="text-sm font-semibold mb-3"><span class="num">5</span>พิกัด GPS <span class="text-xs font-normal text-slate-400">🔒 ดึงอัตโนมัติ</span></p>
+      <button type="button" id="gpsBtn" class="btn w-full bg-brand text-cream rounded-2xl py-3.5 font-semibold shadow-lg shadow-brand/30 disabled:opacity-80">⏳ กำลังดึงพิกัดอัตโนมัติ...</button>
+      <div id="gpsOut" class="hidden mt-3">
+        <div class="grid grid-cols-2 gap-2 text-center">
+          <div class="bg-cream rounded-2xl p-3"><div class="text-xs text-slate-500">Latitude</div><b id="lat"></b></div>
+          <div class="bg-cream rounded-2xl p-3"><div class="text-xs text-slate-500">Longitude</div><b id="lng"></b></div>
+        </div>
+        <p class="text-xs text-slate-500 mt-2 text-center">ความแม่นยำ ±<span id="acc"></span> ม. · <a id="mapLink" target="_blank" class="text-brand font-semibold">เปิดใน Google Maps</a></p>
+        <iframe id="map" class="w-full h-44 rounded-2xl mt-2 border-0 shadow" loading="lazy"></iframe>
+      </div>
+    </section>
+
+    <section class="card rounded-3xl p-5 space-y-4 fade" style="animation-delay:.2s">
+      <div>
+        <p class="text-sm font-semibold mb-3"><span class="num">6</span>ใบรายงานการตรวจ (อัปโหลดรูป)</p>
+        <input id="report" type="file" accept="image/*" class="hidden">
+        <button type="button" onclick="report.click()" class="btn w-full rounded-2xl border-2 border-dashed border-brand/30 bg-cream/60 text-brand py-5 font-semibold"><div class="text-2xl">📄</div>อัปโหลดรูปใบรายงาน</button>
+        <img id="pv2" class="hidden mt-3 rounded-2xl w-full max-h-64 object-cover shadow">
+      </div>
+      <label class="block text-sm font-semibold">Notes
+        <textarea id="notes" rows="3" class="fld font-normal" placeholder="หมายเหตุ (ถ้ามี)"></textarea></label>
+    </section>
+  </div>
+
+  <div id="msg" class="hidden"></div>
+
+  <section id="admin" class="hidden card rounded-3xl p-5 mt-5 text-center">
+    <p class="font-bold mb-2">🔐 Admin: QR Code สำหรับพนักงาน</p>
+    <img id="qr" class="mx-auto w-48 h-48 rounded-xl" alt="QR">
+    <p class="text-xs text-slate-500 mt-2 break-all" id="qrUrl"></p>
+    <p class="text-xs text-slate-500 mt-1">รายละเอียดการเช็กอินทั้งหมด admin ดูได้ใน Google Sheets เท่านั้น</p>
+  </section>
+</div>
+
+<div class="fixed bottom-0 inset-x-0 z-20 p-4 bg-gradient-to-t from-[#06231d] via-[#06231d]/90 to-transparent" style="padding-bottom:calc(1rem + env(safe-area-inset-bottom,0px))">
+  <button id="submit" class="btn max-w-md mx-auto block w-full bg-cream text-brand rounded-2xl py-4 text-lg font-bold shadow-xl shadow-black/40 disabled:opacity-60">✅ บันทึกการเช็กอิน</button>
+</div>
+
+<script>
+// URL ของ Apps Script Web App (ตัวรับข้อมูล บันทึกลงชีต/ไดรฟ์)
+const APP_URL = 'https://script.google.com/macros/s/AKfycbzKQCt5GlVoGm6FG7Co3dZ-HAlHrj55HqtK7sklQu4ClhjCN9oMCWoGt80BwBlwX0M/exec';
+
+const STORES = ["BTS ศาลาแดง","BTS สุรศักดิ์","BTS ช่องนนทรี","BTS นานา","BTS ชิดลม","BTS อโศก","BTS เพลินจิต","BTS พร้อมพงษ์","BTS เอกมัย 1","BTS เอกมัย 2","BTS พระโขนง","BTS อ่อนนุช","BTS อุดมสุข","BTS บางจาก","BTS บางนา","BTS แบริ่ง","BTS อนุสาวรีย์","BTS พญาไท","BTS หมอชิต 1","BTS หมอชิต 2","MRT หลักสี่ ทางออก 1","คลินิกการแพทย์แผนจีนหัวเฉียว","รพ.หัวเฉียว","รพ.วิภาวดี","รพ.ศรีธัญญา","รพ.เกษมราษฎร์ รัตนาธิเบศร์","รพ.พระนั่งเกล้า","รพ.สินแพทย์ เสรีรักษ์","รพ.ตำรวจ","รพ.ภูมิพล","รพ.พระราม 9","รพ.สมิติเวช ธนบุรี","รพ.ชลประทาน","สำนักงานใหญ่ TTB","สาธุประดิษฐ์ 20","สาธรธานี","ข้าวมันไก่ อ่อนนุช","ข้าวมันไก่ ตลาดบองมาร์เช่","ข้าวมันไก่ ถ.จันทน์","สำนักงานใหญ่ Head Office","อื่นๆ"];
+const $ = id => document.getElementById(id);
+STORES.filter(s => s !== 'อื่นๆ').concat('อื่นๆ').forEach(s => { const o = document.createElement('option'); o.value = o.textContent = s; $('store').appendChild(o); });
+$('store').onchange = () => { const other = $('store').value === 'อื่นๆ'; $('storeOther').classList.toggle('hidden', !other); if (other) $('storeOther').focus(); };
+
+try { $('emp').value = localStorage.getItem('emp') || ''; } catch (e) {}
+
+function now() { return new Date().toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Asia/Bangkok' }); }
+function tick(){$('dt').value = now(); $('clock').textContent = new Date().toLocaleTimeString('th-TH',{timeZone:'Asia/Bangkok'});}
+setInterval(tick, 1000); tick();
+
+let photoData = '', reportData = '', pos = null, gpsAt = 0;
+const MAX_GPS_AGE_MIN = 5;
+
+function compress(file, cb, lines) {
+  const r = new FileReader();
+  r.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1024 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = img.width * k; c.height = img.height * k;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      if (lines && lines.length) {
+        const fs = Math.max(14, Math.round(c.width / 34)), pad = Math.round(fs * 0.6), lh = Math.round(fs * 1.35);
+        const boxH = pad * 2 + lh * lines.length;
+        ctx.fillStyle = 'rgba(6,35,29,0.72)';
+        ctx.fillRect(0, c.height - boxH, c.width, boxH);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '600 ' + fs + 'px "Noto Sans Thai", sans-serif';
+        ctx.textBaseline = 'top';
+        lines.forEach((t, i) => ctx.fillText(t, pad, c.height - boxH + pad + i * lh, c.width - pad * 2));
+      }
+      cb(c.toDataURL('image/jpeg', 0.7));
+    };
+    img.src = r.result;
+  };
+  r.readAsDataURL(file);
+}
+function bind(inp, pv, set, getLines) {
+  inp.onchange = () => { const f = inp.files[0]; if (!f) return; compress(f, d => { set(d); pv.src = d; pv.classList.remove('hidden'); pv.previousElementSibling.classList.add('hidden'); }, getLines && getLines()); };
+}
+bind($('photo'), $('pv1'), d => photoData = d, () => {
+  const st = $('store').value === 'อื่นๆ' ? $('storeOther').value.trim() : $('store').value;
+  return [
+    '🕒 ' + now(),
+    pos ? '📍 ' + pos.latitude.toFixed(6) + ', ' + pos.longitude.toFixed(6) + '  (±' + Math.round(pos.accuracy) + ' ม.)' : '📍 ยังไม่ได้พิกัด GPS',
+    [st, $('emp').value.trim()].filter(Boolean).join(' · ') || 'Daily Check-in'
+  ];
+});
+// เปิดกล้องได้ทันที ถ้ายังไม่ได้พิกัด จะลองดึงใหม่ให้
+function takePhoto() {
+  if (!pos && $('gpsBtn').disabled === false) getGPS();
+  $('photo').value = '';
+  $('photo').click();
+}
+bind($('report'), $('pv2'), d => reportData = d);
+
+// ดึง GPS อัตโนมัติ และล็อกพิกัดหลังดึงสำเร็จ (แก้ไขไม่ได้)
+function getGPS() {
+  const btn = $('gpsBtn');
+  if (!navigator.geolocation) { btn.textContent = '❌ อุปกรณ์ไม่รองรับ GPS'; return show('err', 'อุปกรณ์ไม่รองรับ GPS'); }
+  pos = null;
+  btn.disabled = true;
+  btn.textContent = '⏳ กำลังดึงพิกัดอัตโนมัติ...';
+  navigator.geolocation.getCurrentPosition(p => {
+    pos = Object.freeze({ latitude: p.coords.latitude, longitude: p.coords.longitude, accuracy: p.coords.accuracy });
+    gpsAt = Date.now();
+    const la = pos.latitude.toFixed(6), lo = pos.longitude.toFixed(6);
+    $('lat').textContent = la; $('lng').textContent = lo; $('acc').textContent = Math.round(pos.accuracy);
+    $('mapLink').href = 'https://www.google.com/maps?q=' + la + ',' + lo;
+    $('map').src = 'https://maps.google.com/maps?q=' + la + ',' + lo + '&z=16&output=embed';
+    $('gpsOut').classList.remove('hidden');
+    btn.textContent = '🔒 ล็อกพิกัดแล้ว';
+    btn.disabled = true;
+  }, () => {
+    btn.disabled = false;
+    btn.textContent = '📡 ดึงพิกัดไม่สำเร็จ แตะเพื่อลองใหม่';
+    show('err', 'ดึงพิกัดไม่สำเร็จ กรุณาเปิด GPS และอนุญาตการเข้าถึงตำแหน่ง');
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+}
+$('gpsBtn').onclick = () => { if (!pos) getGPS(); };
+getGPS();
+
+function show(type, text) {
+  const m = $('msg');
+  m.className = 'fade fixed top-4 inset-x-4 max-w-md mx-auto z-30 rounded-2xl p-4 text-center font-semibold shadow-2xl ' +
+    (type === 'ok' ? 'bg-brand text-cream' : type === 'load' ? 'bg-amber-400 text-slate-900' : 'bg-rose-500 text-white');
+  clearTimeout(m._t); if (type !== 'load') m._t = setTimeout(() => m.classList.add('hidden'), 3500);
+  m.textContent = text;
+}
+
+$('submit').onclick = async () => {
+  const emp = $('emp').value.trim();
+  let store = $('store').value;
+  if (!emp) return show('err', 'กรุณากรอกชื่อพนักงาน');
+  if (!store) return show('err', 'กรุณาเลือกสาขา');
+  if (store === 'อื่นๆ') {
+    store = $('storeOther').value.trim();
+    if (!store) return show('err', 'กรุณาพิมพ์ชื่อสถานที่');
+    store = 'อื่นๆ: ' + store;
+  }
+  if (!photoData) return show('err', 'กรุณาถ่ายรูปเช็กอิน');
+  if (!pos) return show('err', 'ยังไม่ได้พิกัด GPS กรุณารอสักครู่ หรือแตะปุ่มเพื่อลองใหม่');
+  if (Date.now() - gpsAt > MAX_GPS_AGE_MIN * 60000) {
+    getGPS();
+    return show('err', 'พิกัด GPS เก่าเกิน ' + MAX_GPS_AGE_MIN + ' นาที ระบบกำลังดึงใหม่ กรุณากดบันทึกอีกครั้ง');
+  }
+  try { localStorage.setItem('emp', emp); } catch (e) {}
+  $('submit').disabled = true;
+  show('load', '⏳ กำลังบันทึกข้อมูล...');
+  const body = { employee: emp, store, datetime: now(), lat: pos.latitude, lng: pos.longitude,
+    photo: photoData, report: reportData, notes: $('notes').value,
+    accuracy: pos.accuracy, gpsAgeMs: Date.now() - gpsAt };
+  try {
+    const res = await fetch(APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+    const out = await res.json();
+    if (!out.ok) throw new Error(String(out.error || '').replace(/^Error:\s*/, ''));
+    show('ok', '✅ บันทึกการเช็กอินสำเร็จ');
+    $('store').value = ''; $('storeOther').value = ''; $('storeOther').classList.add('hidden'); $('notes').value = ''; photoData = reportData = ''; pos = null;
+    ['pv1', 'pv2'].forEach(i => $(i).classList.add('hidden')); $('b1').classList.remove('hidden');
+    $('gpsOut').classList.add('hidden');
+    getGPS();
+  } catch (e) {
+    const msg = (e && e.message) || '';
+    show('err', '❌ ' + (msg.indexOf('GPS') >= 0 ? msg : 'บันทึกไม่สำเร็จ กรุณาลองใหม่'));
+    if (msg.indexOf('GPS') >= 0) getGPS();
+  }
+  $('submit').disabled = false;
+};
+
+// Admin QR: เปิดลิงก์แบบ ?admin=1
+if (location.search.includes('admin=1') || (typeof URLSearchParams !== 'undefined' && new URLSearchParams(location.search).has('admin'))) {
+  const u = location.href.split('?')[0];
+  $('qr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(u);
+  $('qrUrl').textContent = u;
+  $('admin').classList.remove('hidden');
+}
+</script>
+</body>
+</html>
