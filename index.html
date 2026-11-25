@@ -88,6 +88,16 @@ body{font-family:'Noto Sans Thai',system-ui,sans-serif;background:#06231d linear
   <button id="submit" class="btn max-w-md mx-auto block w-full bg-cream text-brand rounded-2xl py-4 text-lg font-bold shadow-xl shadow-black/40 disabled:opacity-60">✅ บันทึกการเช็กอิน</button>
 </div>
 
+<div id="cam" class="hidden fixed inset-0 z-50 bg-black flex flex-col">
+  <video id="camVideo" class="flex-1 w-full h-full object-cover" autoplay playsinline muted></video>
+  <div class="absolute top-0 inset-x-0 p-3 text-center text-white text-sm bg-black/40">📷 ถ่ายรูปหน้าร้าน</div>
+  <div class="absolute bottom-0 inset-x-0 p-6 flex items-center justify-between bg-gradient-to-t from-black/80 to-transparent" style="padding-bottom:calc(1.5rem + env(safe-area-inset-bottom,0px))">
+    <button type="button" id="camCancel" class="text-white text-base font-semibold px-4 py-2">ยกเลิก</button>
+    <button type="button" id="camShot" aria-label="ถ่ายรูป" class="w-20 h-20 rounded-full bg-white border-[6px] border-white/40 active:scale-95"></button>
+    <span class="w-16"></span>
+  </div>
+</div>
+
 <script>
 // URL ของ Apps Script Web App (ตัวรับข้อมูล บันทึกลงชีต/ไดรฟ์)
 const APP_URL = 'https://script.google.com/macros/s/AKfycbzKQCt5GlVoGm6FG7Co3dZ-HAlHrj55HqtK7sklQu4ClhjCN9oMCWoGt80BwBlwX0M/exec';
@@ -98,6 +108,18 @@ STORES.filter(s => s !== 'อื่นๆ').concat('อื่นๆ').forEach(s 
 $('store').onchange = () => { const other = $('store').value === 'อื่นๆ'; $('storeOther').classList.toggle('hidden', !other); if (other) $('storeOther').focus(); };
 
 try { $('emp').value = localStorage.getItem('emp') || ''; } catch (e) {}
+// จำค่าที่กรอกไว้ ถ้าหน้าเว็บรีโหลดกลางทาง
+try {
+  const saved = JSON.parse(sessionStorage.getItem('draft') || '{}');
+  if (saved.store) { $('store').value = saved.store; $('store').onchange(); }
+  if (saved.storeOther) $('storeOther').value = saved.storeOther;
+  if (saved.notes) $('notes').value = saved.notes;
+} catch (e) {}
+function saveDraft() {
+  try { sessionStorage.setItem('draft', JSON.stringify({ store: $('store').value, storeOther: $('storeOther').value, notes: $('notes').value })); } catch (e) {}
+}
+['store', 'storeOther', 'notes'].forEach(id => $(id).addEventListener('change', saveDraft));
+$('emp').addEventListener('change', () => { try { localStorage.setItem('emp', $('emp').value.trim()); } catch (e) {} });
 
 function now() { return new Date().toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Asia/Bangkok' }); }
 function tick(){$('dt').value = now(); $('clock').textContent = new Date().toLocaleTimeString('th-TH',{timeZone:'Asia/Bangkok'});}
@@ -106,49 +128,80 @@ setInterval(tick, 1000); tick();
 let photoData = '', reportData = '', pos = null, gpsAt = 0;
 const MAX_GPS_AGE_MIN = 5;
 
+// ย่อรูป + ประทับข้อความ แล้วคืนค่าเป็น JPEG (src = img/video ที่วาดได้, w/h = ขนาดจริง)
+function renderJpeg(src, w, h, lines) {
+  const k = Math.min(1, 1024 / Math.max(w, h));
+  const c = document.createElement('canvas');
+  c.width = Math.round(w * k); c.height = Math.round(h * k);
+  const ctx = c.getContext('2d');
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  if (lines && lines.length) {
+    const fs = Math.max(14, Math.round(c.width / 34)), pad = Math.round(fs * 0.6), lh = Math.round(fs * 1.35);
+    const boxH = pad * 2 + lh * lines.length;
+    ctx.fillStyle = 'rgba(6,35,29,0.72)';
+    ctx.fillRect(0, c.height - boxH, c.width, boxH);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '600 ' + fs + 'px "Noto Sans Thai", sans-serif';
+    ctx.textBaseline = 'top';
+    lines.forEach((t, i) => ctx.fillText(t, pad, c.height - boxH + pad + i * lh, c.width - pad * 2));
+  }
+  return c.toDataURL('image/jpeg', 0.7);
+}
+// โหลดไฟล์รูปแบบประหยัดหน่วยความจำ (ไม่แปลงทั้งไฟล์เป็น base64 ก่อน)
 function compress(file, cb, lines) {
-  const r = new FileReader();
-  r.onload = () => {
-    const img = new Image();
-    img.onload = () => {
-      const k = Math.min(1, 1024 / Math.max(img.width, img.height));
-      const c = document.createElement('canvas');
-      c.width = img.width * k; c.height = img.height * k;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(img, 0, 0, c.width, c.height);
-      if (lines && lines.length) {
-        const fs = Math.max(14, Math.round(c.width / 34)), pad = Math.round(fs * 0.6), lh = Math.round(fs * 1.35);
-        const boxH = pad * 2 + lh * lines.length;
-        ctx.fillStyle = 'rgba(6,35,29,0.72)';
-        ctx.fillRect(0, c.height - boxH, c.width, boxH);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '600 ' + fs + 'px "Noto Sans Thai", sans-serif';
-        ctx.textBaseline = 'top';
-        lines.forEach((t, i) => ctx.fillText(t, pad, c.height - boxH + pad + i * lh, c.width - pad * 2));
-      }
-      cb(c.toDataURL('image/jpeg', 0.7));
-    };
-    img.src = r.result;
-  };
-  r.readAsDataURL(file);
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { const d = renderJpeg(img, img.naturalWidth, img.naturalHeight, lines); URL.revokeObjectURL(url); cb(d); };
+  img.onerror = () => { URL.revokeObjectURL(url); show('err', 'เปิดรูปไม่ได้ กรุณาลองใหม่'); };
+  img.src = url;
 }
 function bind(inp, pv, set, getLines) {
   inp.onchange = () => { const f = inp.files[0]; if (!f) return; compress(f, d => { set(d); pv.src = d; pv.classList.remove('hidden'); pv.previousElementSibling.classList.add('hidden'); }, getLines && getLines()); };
 }
-bind($('photo'), $('pv1'), d => photoData = d, () => {
+function stampLines() {
   const st = $('store').value === 'อื่นๆ' ? $('storeOther').value.trim() : $('store').value;
   return [
     '🕒 ' + now(),
     pos ? '📍 ' + pos.latitude.toFixed(6) + ', ' + pos.longitude.toFixed(6) + '  (±' + Math.round(pos.accuracy) + ' ม.)' : '📍 ยังไม่ได้พิกัด GPS',
     [st, $('emp').value.trim()].filter(Boolean).join(' · ') || 'Daily Check-in'
   ];
-});
-// เปิดกล้องได้ทันที ถ้ายังไม่ได้พิกัด จะลองดึงใหม่ให้
-function takePhoto() {
-  if (!pos && $('gpsBtn').disabled === false) getGPS();
-  $('photo').value = '';
-  $('photo').click();
 }
+function setPhoto(d) {
+  photoData = d; $('pv1').src = d; $('pv1').classList.remove('hidden'); $('b1').classList.add('hidden');
+}
+bind($('photo'), $('pv1'), d => photoData = d, stampLines);
+// เปิดกล้องได้ทันที ถ้ายังไม่ได้พิกัด จะลองดึงใหม่ให้
+// กล้องในหน้าเว็บ: ไม่ต้องสลับไปแอปกล้อง (กันหน้าเว็บรีโหลดบน Android) และเลือกรูปจากแกลเลอรี่ไม่ได้
+let camStream = null;
+function stopCam() {
+  if (camStream) camStream.getTracks().forEach(t => t.stop());
+  camStream = null; $('camVideo').srcObject = null; $('cam').classList.add('hidden');
+}
+async function takePhoto() {
+  if (!pos && $('gpsBtn').disabled === false) getGPS();
+  if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+    // เบราว์เซอร์เก่ามาก: ใช้วิธีเดิม
+    $('photo').value = ''; $('photo').click(); return;
+  }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    $('camVideo').srcObject = camStream;
+    $('cam').classList.remove('hidden');
+    await $('camVideo').play().catch(() => {});
+  } catch (e) {
+    stopCam();
+    show('err', 'เปิดกล้องไม่ได้ กรุณาอนุญาตการใช้กล้องให้เบราว์เซอร์ แล้วลองใหม่');
+  }
+}
+$('camCancel').onclick = stopCam;
+$('camShot').onclick = () => {
+  const v = $('camVideo');
+  if (!v.videoWidth) return show('err', 'กล้องยังไม่พร้อม กรุณารอสักครู่');
+  const d = renderJpeg(v, v.videoWidth, v.videoHeight, stampLines());
+  stopCam();
+  setPhoto(d);
+};
 bind($('report'), $('pv2'), d => reportData = d);
 
 // ดึง GPS อัตโนมัติ และล็อกพิกัดหลังดึงสำเร็จ (แก้ไขไม่ได้)
@@ -212,6 +265,7 @@ $('submit').onclick = async () => {
     const out = await res.json();
     if (!out.ok) throw new Error(String(out.error || '').replace(/^Error:\s*/, ''));
     show('ok', '✅ บันทึกการเช็กอินสำเร็จ');
+    try { sessionStorage.removeItem('draft'); } catch (e) {}
     $('store').value = ''; $('storeOther').value = ''; $('storeOther').classList.add('hidden'); $('notes').value = ''; photoData = reportData = ''; pos = null;
     ['pv1', 'pv2'].forEach(i => $(i).classList.add('hidden')); $('b1').classList.remove('hidden');
     $('gpsOut').classList.add('hidden');
